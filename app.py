@@ -26,32 +26,41 @@ def manually_parse_duration(duration_str):
         print(f"Error in manually parsing duration: {e}")
         return None
 
-def get_video_description(api_key, video_url):
-    video_id = video_url.split("=")[-1]
-    url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id={video_id}&key={api_key}"
-    response = requests.get(url)
-    response_json = response.json()
+def get_video_info(api_key, video_url):
+    try:
+        video_id = video_url.split("=")[-1]
+        url = f"https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id={video_id}&key={api_key}"
+        response = requests.get(url)
+        response_json = response.json()
 
-    if "items" in response_json and response_json["items"]:
-        video_description = response_json["items"][0]["snippet"]["description"]
-        video_title = response_json["items"][0]["snippet"]["title"]
-        video_duration = manually_parse_duration(response_json["items"][0]["contentDetails"]["duration"])
-        return video_description, video_title, video_duration
-    else:
-        print("No items found in API response.")
-        return None, None, None
+        if "items" in response_json and response_json["items"]:
+            video_description = response_json["items"][0]["snippet"]["description"]
+            video_title = response_json["items"][0]["snippet"]["title"]
+            video_duration = manually_parse_duration(response_json["items"][0]["contentDetails"]["duration"])
+            return video_description, video_title, video_duration
+    except Exception as e:
+        print(f"Error retrieving video info: {e}")
+    return None, None, None
+
+def load_intervals_from_file(file_path):
+    try:
+        with open(file_path, 'r') as file:
+            raw_intervals = json.load(file)
+        return [(convert_time_str_to_seconds(start), convert_time_str_to_seconds(end)) for start, end in raw_intervals]
+    except Exception as e:
+        print(f"Error reading intervals file: {e}")
+    return None
 
 def download_video(url, output_dir='.'):
     print(f"Starting to download video from {url}")
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
         'outtmpl': os.path.join(output_dir, 'downloaded_video.%(ext)s'),
-        'merge_output_format': 'mp4'  # Ensure the final file is an mp4
+        'merge_output_format': 'mp4'
     }
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         ydl.download([url])
     return os.path.join(output_dir, 'downloaded_video.mp4')
-
 
 def trim_video(source_file, start_time, end_time, output_filename, output_dir):
     output_path = os.path.join(output_dir, output_filename)
@@ -82,7 +91,7 @@ def process_videos(source, intervals, output_dir, video_duration, use_local=Fals
         os.remove(source_file)
 
 def extract_segments(api_key, url):
-    description, video_title, video_duration = get_video_description(api_key, url)
+    description, video_title, video_duration = get_video_info(api_key, url)
     
     if not description:
         print("No description available for video.")
@@ -111,6 +120,13 @@ def convert_time_str_to_seconds(time_str):
     h, m, s = [int(part) for part in time_str.split(':')]
     return h * 3600 + m * 60 + s
 
+def setup_output_directory(video_title):
+    sanitized_title = sanitize_filename(video_title)
+    output_directory = os.path.join(os.getcwd(), sanitized_title)
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+    return output_directory
+
 def main():
     print("Script started.")
     parser = argparse.ArgumentParser(description='Download and trim YouTube videos.')
@@ -120,36 +136,24 @@ def main():
     parser.add_argument('-intervals_path', type=str, help='Path to the JSON file containing time intervals')
     args = parser.parse_args()
 
-    titles = None
-    video_duration = None
-    if args.extract_segments:
-        intervals, titles, video_title, video_duration = extract_segments(args.api_key, args.url)
-        if not intervals:
-            print("No valid intervals extracted. Exiting the script.")
-            return
-    else:
-        if args.intervals_path:
-            try:
-                with open(args.intervals_path, 'r') as file:
-                    raw_intervals = json.load(file)
-                intervals = [(convert_time_str_to_seconds(start), convert_time_str_to_seconds(end)) for start, end in raw_intervals]
-                print("Intervals loaded successfully.")
-            except Exception as e:
-                print(f"Error reading intervals file: {e}")
-                return
-        else:
-            print("Intervals path not provided.")
-            return
-
+    video_description, video_title, video_duration = get_video_info(args.api_key, args.url)
     if video_duration is None:
         print("Video duration not available. Exiting.")
         return
 
-    sanitized_title = sanitize_filename(video_title)
-    output_directory = os.path.join(os.getcwd(), sanitized_title)
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory)
+    intervals, titles = None, None
+    if args.extract_segments:
+        intervals, titles, _ = extract_segments(args.api_key, args.url)
+        if not intervals:
+            print("No valid intervals extracted. Exiting the script.")
+            return
+    elif args.intervals_path:
+        intervals = load_intervals_from_file(args.intervals_path)
+        if not intervals:
+            print("Error loading intervals. Exiting.")
+            return
 
+    output_directory = setup_output_directory(video_title)
     process_videos(args.url, intervals, output_directory, video_duration, use_local=False, titles=titles)
 
 if __name__ == "__main__":
