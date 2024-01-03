@@ -10,5 +10,5 @@ COPY . .
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir requests yt_dlp moviepy
 
-# Run app.py when the container launches
-CMD ["python", "./app.py"]
+# The container will require command-line arguments to run the scripts
+CMD ["python", "./app-intervals.py"]  # or "./app-chapters.py"

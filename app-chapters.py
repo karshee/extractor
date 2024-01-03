@@ -13,6 +13,12 @@ import sys
 def sanitize_filename(name):
     return re.sub(r'[^\w\-_\. ]', '_', name)
 
+def format_duration(seconds):
+    # Convert seconds to HH:MM:SS format
+    m, s = divmod(seconds, 60)
+    h, m = divmod(m, 60)
+    return f"{h:02d}:{m:02d}:{s:02d}"
+
 def manually_parse_duration(duration_str):
     try:
         match = re.match(r'PT(\d+H)?(\d+M)?(\d+S)?', duration_str)
@@ -95,9 +101,11 @@ def extract_segments(api_key, url):
         print("No description available for video.")
         return None, None, None
 
+    # Regex to find timestamps and titles in the description
     pattern = re.compile(r'(\d{1,2}:\d{2})\s*-?\s*(.*?)\s*(?=\d{1,2}:\d{2}|\Z)')
     matches = pattern.findall(description)
 
+    # If matches are found in the description, use them
     if matches:
         timestamps = [match[0] for match in matches]
         titles = [match[1] for match in matches]
@@ -106,10 +114,23 @@ def extract_segments(api_key, url):
     else:
         print("No chapters found in description. Attempting to extract chapters using Selenium.")
         try:
+            # Run sel_chapters.py to extract chapters
             subprocess.run([sys.executable, './sel_chapters.py', url], check=True)
             with open('chapters_output.json', 'r') as file:
                 chapters_json = json.load(file)
-            intervals = [(chap["timestamp"], "end", chap["title"]) for chap in chapters_json]
+
+            intervals = []
+            for i, chapter in enumerate(chapters_json[:-1]):  # Process all but the last chapter
+                start_time = chapter["timestamp"]
+                end_time = chapters_json[i + 1]["timestamp"]
+                title = chapter["title"]
+                intervals.append((start_time, end_time, title))
+
+            # Handle the last chapter separately
+            last_chapter = chapters_json[-1]
+            intervals.append((last_chapter["timestamp"], format_duration(video_duration - 1), last_chapter["title"]))
+
+            print("Extracted intervals from sel_chapters.py:", intervals)
             return intervals, [chap['title'] for chap in chapters_json], video_title, video_duration
         except subprocess.CalledProcessError as e:
             print(f"Error extracting chapters using Selenium: {e}")
@@ -117,6 +138,8 @@ def extract_segments(api_key, url):
         except FileNotFoundError:
             print("Chapters file not found.")
             return None, None, None
+
+
 
 def setup_output_directory(video_title):
     sanitized_title = sanitize_filename(video_title)
@@ -144,14 +167,11 @@ def process_videos(source, intervals, output_dir, video_duration, use_local=Fals
         print(f"Removing original downloaded file: {source_file}")
         os.remove(source_file)
 
-
 def main():
     print("Script started.")
-    parser = argparse.ArgumentParser(description='Download and trim YouTube videos.')
+    parser = argparse.ArgumentParser(description='Download and segment YouTube videos based on descriptions or chapters.')
     parser.add_argument('-url', type=str, help='URL of the YouTube video', required=True)
     parser.add_argument('-api_key', type=str, help='YouTube Data API key', required=True)
-    parser.add_argument('-extract_segments', action='store_true', help='Extract video segments from the video description and use them as intervals.')
-    parser.add_argument('-intervals_path', type=str, help='Path to the JSON file containing time intervals')
     args = parser.parse_args()
 
     video_description, video_title, video_duration = get_video_info(args.api_key, args.url)
@@ -159,17 +179,10 @@ def main():
         print("Video duration not available. Exiting.")
         return
 
-    intervals, titles = None, None
-    if args.extract_segments:
-        intervals, titles, _, _ = extract_segments(args.api_key, args.url)
-        if not intervals:
-            print("No valid intervals extracted. Exiting the script.")
-            return
-    elif args.intervals_path:
-        intervals = load_intervals_from_file(args.intervals_path)
-        if not intervals:
-            print("Error loading intervals. Exiting.")
-            return
+    intervals, titles, _, _ = extract_segments(args.api_key, args.url)
+    if not intervals:
+        print("No valid intervals extracted. Exiting the script.")
+        return
 
     output_directory = setup_output_directory(video_title)
     process_videos(args.url, intervals, output_directory, video_duration, use_local=False, titles=titles)

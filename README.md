@@ -1,50 +1,32 @@
-
 # YouTube Video Segment Processor
 
-This Python application, `app.py`, is designed to download YouTube videos, optionally extract segments based on video chapters or a specified configuration, and process these segments into separate video files.
+This Python application suite includes two scripts, `app-intervals.py` and `app-chapters.py`, designed to download YouTube videos and optionally extract segments based on video chapters, descriptions, or a specified configuration. 
 
 ## Requirements
 
 - Python 3
 - Required Python libraries: `requests`, `yt_dlp`, `moviepy`
 - YouTube Data API Key
+- Docker (optional for containerized execution)
 
 ## Setup
 
-1. Clone the repository or download `app.py` to your local machine.
+1. Clone the repository or download the scripts to your local machine.
 2. Install the required Python libraries:
-   ```
+   ```bash
    pip install requests yt_dlp moviepy
-   ```
-3. Obtain a YouTube Data API key. [Follow these instructions](https://developers.google.com/youtube/registering_an_application) to get an API key.
+3. a YouTube Data API key. Follow these instructions to get an API key.
 
 ## Usage
+The scripts can be used in different modes:
 
-The script can be used in two modes:
+## `app-intervals.py`
+This script uses a config.json file to define segments for extraction.
 
-1. **Extract Segments Mode**: Extracts video segments based on the chapters described in the video's description.
-2. **Custom Configuration Mode**: Uses a `config.json` file to define the segments to be extracted.
+Custom Configuration Mode
+To run `app-intervals.py` with a specific `config.json` file:
 
-### Extract Segments Mode
-
-To run the script in extract segments mode, use the following command:
-
-```bash
-python app.py -url [youtube_video_url] -api_key [your_youtube_api_key] -extract_segments
-```
-
-Example:
-
-```bash
-python app.py -url "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -api_key "YOUR_API_KEY" -extract_segments
-```
-
-### Custom Configuration Mode
-
-To run the script with a specific `config.json` file:
-
-1. Create a `config.json` file with the following format:
-
+Create a `config.json` file with the desired intervals:
    ```json
    [
        ["00:00:00", "00:10:10"],
@@ -53,7 +35,7 @@ To run the script with a specific `config.json` file:
    ]
    ```
 
-2. Run the script using the command:
+Run the script using the command:
 
    ```bash
    python app.py -url [youtube_video_url] -api_key [your_youtube_api_key] -intervals_path [path_to_config.json]
@@ -65,30 +47,29 @@ To run the script with a specific `config.json` file:
    python app.py -url "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -api_key "YOUR_API_KEY" -intervals_path "/path/to/config.json"
    ```
 
-## Running in a Docker Container
+Download Only Mode
 
-To run this application in a Docker container, follow these steps:
+To only download the video without segmenting:
+   ```bash
+   python app.py -url [youtube_video_url] -api_key [your_youtube_api_key] -download_only
+   ```
 
-### Dockerfile
 
-Create a file named `Dockerfile` in the same directory as `app.py` with the following content:
+## `app-chapters.py`
+This script extracts video segments based on chapters described in the video's description or using sel_chapters.py for automated chapter extraction.
 
-```Dockerfile
-# Use an official Python runtime as a parent image
-FROM python:3.8-slim
+Run the script using the command:
 
-# Set the working directory in the container
-WORKDIR /usr/src/app
+   ```bash
+    python app-chapters.py -url [youtube_video_url] -api_key [your_youtube_api_key] -extract_segments
+   ```
 
-# Copy the current directory contents into the container at /usr/src/app
-COPY . .
+   Example:
 
-# Install any needed packages specified in requirements.txt
-RUN pip install --no-cache-dir requests yt_dlp moviepy
+   ```bash
+    python app-chapters.py -url "https://www.youtube.com/watch?v=dQw4w9WgXcQ" -api_key "YOUR_API_KEY" -extract_segments
 
-# Run app.py when the container launches
-CMD ["python", "./app.py"]
-```
+   ```
 
 ### Build and Run the Docker Container
 
@@ -98,23 +79,26 @@ CMD ["python", "./app.py"]
    docker build -t youtube-video-processor .
    ```
 
+
 2. Run the container:
 
-   - For Extract Segments Mode:
+   - For app-intervals.py with Download Only Mode:
 
      ```bash
-     docker run -e YOUTUBE_URL=[youtube_video_url] -e API_KEY=[your_youtube_api_key] -e MODE=extract_segments youtube-video-processor
+    docker run -v ${PWD}:/usr/src/app youtube-video-processor python ./app-intervals.py -url [youtube_video_url] -api_key [your_youtube_api_key] -download_only
      ```
 
-   - For Custom Configuration Mode:
-
-     First, you need to ensure that the `config.json` file is available inside the container. This can be done by mounting the directory containing `config.json` into the container.
+   - For app-intervals.py with Custom Configuration Mode:
 
      ```bash
-     docker run -v /path/to/config_folder:/usr/src/app/config -e YOUTUBE_URL=[youtube_video_url] -e API_KEY=[your_youtube_api_key] -e CONFIG_PATH=config/config.json youtube-video-processor
+    docker run -v ${PWD}:/usr/src/app youtube-video-processor python ./app-intervals.py -url [youtube_video_url] -api_key [your_youtube_api_key] -intervals_path [path_to_config.json]
+     ```
+   - For app-chapters.py:
+     ```bash
+    docker run -v ${PWD}:/usr/src/app youtube-video-processor python ./app-chapters.py -url [youtube_video_url] -api_key [your_youtube_api_key] -extract_segments
      ```
 
-Replace `[youtube_video_url]`, `[your_youtube_api_key]`, and `/path/to/config_folder` with the appropriate values. Note that in the Docker environment, the script will be looking for environment variables for configuration.
+Replace [youtube_video_url], [your_youtube_api_key], and [path_to_config.json] with the appropriate values.
 
 ## License
 
