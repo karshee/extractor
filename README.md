@@ -83,16 +83,15 @@ Run the script using the command:
 2. Run the container:
 
    - For app-intervals.py with Download Only Mode:
-
      ```bash
     docker run -v ${PWD}:/usr/src/app youtube-video-processor python ./app-intervals.py -url [youtube_video_url] -api_key [your_youtube_api_key] -download_only
      ```
 
    - For app-intervals.py with Custom Configuration Mode:
-
      ```bash
     docker run -v ${PWD}:/usr/src/app youtube-video-processor python ./app-intervals.py -url [youtube_video_url] -api_key [your_youtube_api_key] -intervals_path [path_to_config.json]
      ```
+     
    - For app-chapters.py:
      ```bash
     docker run -v ${PWD}:/usr/src/app youtube-video-processor python ./app-chapters.py -url [youtube_video_url] -api_key [your_youtube_api_key] -extract_segments
