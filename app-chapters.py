@@ -9,6 +9,9 @@ import yt_dlp
 from moviepy.editor import VideoFileClip
 import subprocess
 import sys
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 def sanitize_filename(name):
     return re.sub(r'[^\w\-_\. ]', '_', name)
@@ -28,7 +31,7 @@ def manually_parse_duration(duration_str):
         if match.group(2):
             minutes = int(match.group(2)[:-1])
         if match.group(3):
-            seconds = int(match.group(3)[:-1])
+            seconds = int(match.group(3)[:-1]) 
         return hours * 3600 + minutes * 60 + seconds
     except Exception as e:
         print(f"Error in manually parsing duration: {e}")
@@ -41,14 +44,18 @@ def get_video_info(api_key, video_url):
         response = requests.get(url)
         response_json = response.json()
 
+        # Log the API response
+        logging.info(f"API Response: {response_json}")
+
         if "items" in response_json and response_json["items"]:
             video_description = response_json["items"][0]["snippet"]["description"]
             video_title = response_json["items"][0]["snippet"]["title"]
             video_duration = manually_parse_duration(response_json["items"][0]["contentDetails"]["duration"])
             return video_description, video_title, video_duration
     except Exception as e:
-        print(f"Error retrieving video info: {e}")
+        logging.error(f"Error retrieving video info: {e}")
     return None, None, None
+
 
 def load_intervals_from_file(file_path):
     try:
